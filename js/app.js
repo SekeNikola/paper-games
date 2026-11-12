@@ -18,7 +18,7 @@ function route() {
   const app = document.getElementById('app');
   const g = GAMES.find(x => '#' + x.id === location.hash);
   const room = new URLSearchParams(location.search).get('room');
-  if (session && !(g && room)) { session.peer.destroy(); session = null; }
+  if (session && !(g && room)) leave();
   current = null;
   app.replaceChildren();
   scrollTo(0, 0);
@@ -119,20 +119,63 @@ function join(code, g, bar, area) {
     : `Online connection problem (${e.type}). Reload the page to try again.`));
 }
 
+// we're leaving (closing the tab or going back to the menu): say bye so the friend knows right away
+function leave() {
+  if (!session) return;
+  clearInterval(session.timer);
+  try { session.conn?.open && session.conn.send({ t: 'bye' }); } catch {}
+  session.peer.destroy();
+  session = null;
+}
+addEventListener('pagehide', leave);
+
+const PING_MS = 2000, GONE_MS = 10000; // no message for 10s = the friend is gone (crash, lost wifi, phone locked)
+
 // moves from the friend: 'restart' starts a fresh board with their seed, everything else is a game move
 function wire(g, bar, area, peer, conn, me) {
   session.conn = conn;
+  document.querySelector('.gone')?.remove(); // the friend came back with the same link
   names = ['', ''];
   names[me] = load('pg-name');
+  let heard = Date.now(), left = false;
   conn.on('data', d => {
+    heard = Date.now();
+    if (left || d.t === 'ping') return;
+    if (d.t === 'bye') return gone();
     if (d.t === 'restart') return play(g, area, d.seed, me, conn);
     if (d.t === 'name') { names[1 - me] = String(d.name ?? '').slice(0, 16); return paintTurn(); } // friend can only rename themselves
     current?.dispatch(d, true);
   });
-  const hello = () => conn.send({ t: 'name', p: me, name: names[me] });
+  const hello = () => { heard = Date.now(); conn.send({ t: 'name', p: me, name: names[me] }); };
   conn.open ? hello() : conn.on('open', hello);
-  conn.on('close', () => bar.replaceChildren('Your friend left the game.', h('a', { href: location.pathname + '#' + g.id }, 'Start a new one')));
+  conn.on('close', gone);
+  clearInterval(session.timer);
+  session.timer = setInterval(() => {
+    if (!conn.open) return; // still connecting
+    if (Date.now() - heard > GONE_MS) return gone();
+    try { conn.send({ t: 'ping' }); } catch {}
+  }, PING_MS);
   bar.replaceChildren(h('span', { class: 'you' }, `Online! You are player ${me + 1}.`), ...nameInputs(me, conn), voice(peer, conn.peer));
+
+  function gone() {
+    if (left || session?.conn !== conn) return;
+    left = true;
+    clearInterval(session.timer);
+    session.conn = null; // host: the room stays open, so the friend can rejoin with the same link
+    conn.close();
+    const friend = names[1 - me] || turnBar.N[1 - me];
+    names[1 - me] = friend + ' (left)';
+    paintTurn();
+    const local = () => { history.replaceState(null, '', location.pathname + '#' + g.id); route(); };
+    document.querySelector('.sheet').append(h('div', { class: 'gone', role: 'alertdialog', 'aria-label': 'Player left' },
+      h('div', { class: 'note' },
+        h('h2', {}, `${friend} left the game`),
+        h('p', {}, me === 0 ? 'They can come back with the same invite link. This room stays open while you wait.' : 'The game is over. Ask your friend for a new link to play again.'),
+        h('div', { class: 'controls' },
+          h('button', { onclick: local }, 'Play on this device'),
+          h('button', { onclick: () => { history.replaceState(null, '', location.pathname + '#'); route(); } }, 'All games')))));
+    bar.replaceChildren(h('span', {}, `${friend} left.`));
+  }
 }
 
 // optional voice chat over the same WebRTC link
