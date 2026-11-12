@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper Games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Patrick+Hand&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<!-- WebRTC peer-to-peer for online play (free public signaling server) -->
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+<!-- wobble filter that makes crisp SVG lines look hand-drawn -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="ink"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="2.6"/></filter>
+</svg>
+<main id="app"></main>
+<script src="js/common.js"></script>
+<script src="js/battleship.js"></script>
+<script src="js/army.js"></script>
+<script src="js/dicetac.js"></script>
+<script src="js/planes.js"></script>
+<script src="js/fold.js"></script>
+<script src="js/dotrace.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
